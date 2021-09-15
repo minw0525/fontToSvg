@@ -1,0 +1,136 @@
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Gotham Rounded', 'Helvetica', 'Arial', sans-serif;
+    font-weight: 100;
+    font-size: 4vh;
+    box-sizing: border-box;
+}
+
+body {
+    width: 100vw;
+    height: 100vh;
+    background: white;
+}
+svg {
+    width: 100%;
+    height: 100%;
+}
+.bgBox {
+    border: 6px solid greenyellow;
+    background-color: black;
+    color: greenyellow;
+}
+.wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.title {
+    font-size: 0.8rem;
+    justify-self: center;
+    color: white;
+    font-weight: 300;
+    position: relative;
+    top: -30px;
+}
+
+.title span {
+    display: inline-block;
+    text-align: center;
+}
+.scoreBoard {
+    position: relative;
+    top: -20px;
+    box-sizing: content-box;
+    font-weight: 900;
+    font-size: 0.9rem;
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    padding: 5px 10px 5px 10px;
+    border-radius: 10px;
+}
+.container {
+    width: 43vh;
+    min-width: 430px;
+    height: 60vh;
+    min-height: 600px;
+    display: flex;
+    border-radius: 20px;
+    border: 3px solid greenyellow;
+    background-color: black;
+    overflow: hidden;
+    box-sizing: content-box;
+}
+
+.container > div {
+    height: 100%;
+    width: 100%;
+    border: 3px solid greenyellow;
+}
+
+.flameTrail {
+    flex: 1 1 15%;
+    overflow: hidden;
+    position: relative;
+}
+.flameTrail:first-child {
+    border-top-left-radius: 15px;
+    border-bottom-left-radius: 15px;
+}
+.flameTrail:last-child {
+    border-top-right-radius: 15px;
+    border-bottom-right-radius: 15px;
+}
+.bombCont {
+    flex: 1 1 70%;
+    display: flex;
+}
+.bombColumn {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(10, 1fr);
+    justify-items: center;
+    align-items: center;
+    transform: rotate(180deg);
+}
+.start {
+    background-color: black;
+    display: block;
+    width: 6rem;
+    height: 1.3rem;
+    margin-top: 30px;
+    font-size: 0.9rem;
+    font-weight: 900;
+    border-radius: 10px;
+}
+.flame {
+    background-color: red;
+    position: absolute;
+    left: 14%;
+    width: 4vh;
+    height: 4vh;
+    box-shadow: inset 0px 0px 5px 5px yellow;
+    border-radius: 50%;
+}
+.bomb {
+    background: radial-gradient(#89a8ff, #3658b6, #00195d);
+    border-radius: 50%;
+    height: 80%;
+    width: 80%;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+.bomb span {
+    margin-left: -9px;
+    font-size: 0.9rem;
+    font-weight: 900;
+    -webkit-text-stroke: medium red;
+    position: relative;
+    top: 1px;
+}
