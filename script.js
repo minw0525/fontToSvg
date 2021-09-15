@@ -1,9 +1,14 @@
 
-const svg = document.getElementById('typeSvg');
+let svg = document.getElementById('typeSvg');
+const viewBoxX = 1920;
+const viewBoxY = 1080;
+svg.setAttribute('viewBox', `0 0 ${viewBoxX} ${viewBoxY}`)
+const input = document.getElementById('textInput');
+const colorInput = document.getElementById('fillColor');
+colorInput.parentNode.style.backgroundColor = colorInput.value;
 let ctm = svg.getScreenCTM();
 let inverse = ctm.inverse();
-const textValue = "Hello"
-const input = document.getElementById('typeInput');
+let text = "Oo"
 let font;
 let fontSize = 500;
 let clickedP = [];
@@ -14,27 +19,29 @@ let tempPathData = '';
 let tempGuideData = [];
 let guideCopy = [];
 let storeOffset = {prev:{},next:{}};
-const scale = 0.7;
-const allPointList = [];
-const allPathList = [];
-const allGuideList = [];
+let scale = 1;
+let pad = 150;
+let allPointList = [];
+let allPathList = [];
+let allGuideList = [];
 const pathStyle = {
     rectWH: 12,
     circleR: 7,
     strokeColor: 'dodgerblue',
-    glyphFill: 'transparent',
+    glyphFill: colorInput.value,//'transparent',
     pointFill: 'transparent',
     handleColor: 'lightpink',
-    pointColor: '#FF4AFF',
-    glyphStrokeWidth: 8,
+    pointColor: 'salmon',
+    glyphStrokeWidth: 4,
     guideStrokeWidth: 4,
+    strokeDash: false,
     glyphLine: ()=>{
         return  {
             'fill': pathStyle.glyphFill,
             'stroke': pathStyle.strokeColor,
             'stroke-width': pathStyle.glyphStrokeWidth,
             'stroke-linecap': "miter",
-            'stroke-dasharray': '10 10'
+            'stroke-dasharray': pathStyle.strokeDash
             //'style': 'transform : scaleY(-1) translateY(-50%)'
         }
     },
@@ -61,10 +68,11 @@ const pathStyle = {
     }
 }
 class Point{
-    constructor(x, y, pointType, id){
-        this.x = x || 0;
-        this.y = y || 0;
-        this.t = pointType;
+    constructor(i, id){
+        this.x = i.x || 0;
+        this.y = i.y || 0;
+        this.t = i.type;
+        this.c = i.c
         this.id = id || '';
         this.r = this.t==='handlePoint' ? pathStyle.circleR : 0
         this.s = this.t==='cornerPoint' ? pathStyle.rectWH : 0
@@ -182,21 +190,21 @@ class Guide{
     }
 }
 class Path{
-    constructor(group, points){
+    constructor(group, i, pData){
         this.group = group;
-        this.points = points;
-        this.d = getPathData(this.points)
+        this.points = i.points;
+        this.data = getPathData(i.commands)
     }
     path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     drawPath = function(){
         setAttributes(this.path, {
-            d: this.d,
+            d: this.data,
         })
         this.group.appendChild(this.path);
     }
     checkMovingPoint = function(){
         let points
-        points = getPathData(this.points).split(/\s{1,}/)
+        points = this.data.split(/\s{1,}/)
         return points
         //s = i.split('p')[1]
     }
@@ -206,11 +214,11 @@ class Path{
         c = xy.charAt(0)
         c = !c.match(/\d/) ? c : '';
         xy = xy.getIdFromTarget(',');
-        xy = c.concat([x, y].join(' '))
+        xy = c.concat([x, y].join(','))
         tempPathData[i[1]] = xy
-        //console.log(i, tempPathData.join(' '))
+        this.data = tempPathData.join(' ')
         setAttributes(this.path,{
-            d: tempPathData.join(' ')
+            d: this.data
         })
         allPointList[i[0]][i[1]].moveTo(x, y)
         
@@ -293,7 +301,10 @@ const invertY = function invertY(yMax, yMin) {
         return cloned;
     };
   };
-
+Node.prototype.empty = function(){
+    let cNode = this.cloneNode(false);
+    this.parentNode.replaceChild(cNode, this)
+}
 const isntNaN = function isntNaN(value) {
     return !isNaN(value);
 };
@@ -301,53 +312,49 @@ const scaleGlyphs = function(scale){
     return function(command){
         const cloned = _assign({}, command);
         for(let key in cloned){
-            if (typeof(cloned[key]) === 'number') cloned[key] = round2DecPl( cloned[key] * scale );
+            if (typeof(cloned[key]) === 'number') cloned[key] = round2DecPl( cloned[key] * scale + pad);
         }
         return cloned;
     }
 } 
-function commandToPoints(command, arr){
-    const type =command.type,
-        x = command.x,
-        y = command.y,
-        x1 = command.x1,
-        y1 = command.y1,
-        x2 = command.x2,
-        y2 = command.y2
-    switch(type){
-        case 'M':
-        case 'L':
-            arr.push({
-                'type': 'cornerPoint',
-                'x': x,
-                'y': y        
-            });
-            break;
-        case 'Q':
-            break;
-        case 'C':
-            arr.push({
-                'type': 'handlePoint',
-                'x': x1,
-                'y': y1        
-            },{
-                'type': 'handlePoint',
-                'x': x2,
-                'y': y2    
-            },{
-                'type': 'cornerPoint',
-                'x': x,
-                'y': y        
-            })
-            break;
-        case 'Z':
-            arr.push({
-                'type': 'pathEnd'
-            })
-            break;
-        default:
-            break  
-    }
+function commandToPoints(n, arr){
+    const t =n.type,
+        x = n.x,
+        y = n.y,
+        x1 = n.x1,
+        y1 = n.y1,
+        x2 = n.x2,
+        y2 = n.y2
+
+    "M" === t ? arr.push({
+        type: 'cornerPoint',
+        x : x,
+        y : y,
+        c : t
+    }) : "L" === t ? arr.push({
+        type: 'cornerPoint',
+        x : x,
+        y : y,
+        c : t
+    }) : "C" === t ? arr.push({
+        type : 'handlePoint',
+        x : x1,
+        y : y1,
+        c : t        
+    },{
+        type : 'handlePoint',
+        x : x2,
+        y : y2,
+        c : t    
+    },{
+        type : 'cornerPoint',
+        x : x,
+        y : y,
+        c : t        
+    }) : "Z" === t && arr.push({
+        type : 'pathEnd',
+        c : t
+    })
     return arr
 }
 
@@ -358,43 +365,51 @@ function getPoints(commands){
     }).flat()
 }
 
-function getPathData(pts){
-    let command;
-    let type;
-    let temp = [];
-    pts.reduce((acc, curr)=>{
-        //console.log(idx)
-        let prev = acc.slice(-1)[0];
-        command = !prev || command===' Z ' ? 'M' : command;
-        //console.log(`${acc}, idx: ${idx}, command: ${command}`)
-        //console.log(curr)
-        temp.push(acc)            
-        switch (curr.t) {
-            case 'cornerPoint':
-                if (command !== 'M') command = (type === 'cornerPoint') ? ' L' : ''
-                type = curr.t;
-                return command.concat(curr.x).concat(',', curr.y)
-            case 'handlePoint':
-                command = (command === 'M'|| command === ' L'|| command === '') ? ' C' : ''
-                type = curr.t;
-                return command.concat(curr.x).concat(',', curr.y)
-            case 'pathEnd':
-                command = ' Z '
-                type = curr.t;
-                return command
-            default:
-                break;
-        }
-    },[])
-    return temp.flat().join(' ').concat(' Z')
+function getPathData(commands){
+    for (var t = "", i = 0; i < commands.length; i ++) {
+        var n = commands[i];
+        "M" === n.type ? t += `M${n.x},${n.y} ` : "L" === n.type ? t += `L${n.x},${n.y } ` : "C" === n.type ? t += `C${n.x1},${n.y1} ${n.x2},${n.y2} ${n.x},${n.y} ` : "Z" === n.type && (t += "Z ")
+    }
+    return t
 }
 
 (async function initFont(){
     font = await opentype.load('https://parkminwoo.com/font/Hesiod-Regular.otf');
-    if(svg.hasChildNodes()) svg.removeChild(document.querySelector('path'))
+    drawFonts(text)
+})();
+
+function drawFonts(textValue){
+    //if(svg.hasChildNodes()) svg.removeChild(document.querySelector('g'))
+    if(svg.hasChildNodes()){
+        allPointList = []
+        allPathList = []
+        allGuideList = []
+        svg.lastElementChild.empty()
+        svg.empty()
+        svg = document.getElementById('typeSvg');
+    }
     const ascender = font.tables.os2.sTypoAscender;
     const descender = font.tables.os2.sTypoDescender;
-    const glyphArr = font.stringToGlyphs(textValue).reduce(function (accum, curr) {
+    let glyphArr = font.stringToGlyphs(textValue)
+    
+
+    let totalWidth = glyphArr.reduce((acc, curr)=>{
+        let prev = acc.slice(-1)[0]
+        console.log(acc)
+        l = prev ? prev + (font.getKerningValue(acc[0],curr) || 0) + (font.letterSpacing || 0) + curr.advanceWidth : curr.advanceWidth
+        return [curr, l] 
+    },[])[1]
+
+    let scaleX = ((viewBoxX - pad*2) / totalWidth)//.toFixed(2)
+    scale = scaleX < 0.7 ? scaleX : 0.7
+    /*glyphArr.forEach((e,)=>{
+        console.log(e.path)
+        console.log('getPath', e.getPath())
+        console.log('getPath.toPathData', e.getPath().toPathData())
+        console.log('getPath.toSVG', e.getPath().toSVG())
+        console.log('getPath.toDOMElement', e.getPath().toSVG())
+    })*/
+    glyphArr = glyphArr.reduce(function (accum, curr) {
         let prev = accum.slice(-1)[0];
         let x = prev ? prev.x + prev.advanceWidth + (font.getKerningValue(prev, curr) || 0) + (font.letterSpacing || 0) : 0;
         let commands = curr.path.commands.map(transform(x, ascender, descender)).map(scaleGlyphs(scale));
@@ -402,14 +417,19 @@ function getPathData(pts){
           x: x,
           xMax: x + curr.xMax,
           xMin: x + curr.xMin,
+          path: curr.path,
           ascender: ascender,
           descender: descender,
           commands: commands,
-          points: getPoints(commands)
+          points: getPoints(commands),
+          getPath : curr.getPath
         })]);
     }, []).filter(function (e) {
         return e.commands && e.commands.length > 0;
     });
+    //console.log(glyphArr[1].path)
+    //console.log(glyphArr[0].commands[0])
+    //console.log(glyphArr[1].commands[0])
 
     const pathGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const pointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -432,23 +452,17 @@ function getPathData(pts){
     for(let i of glyphArr){
         const pts = [];
         //let isEnd = false;
-        let pathStart = {};
         let idx = glyphArr.indexOf(i)
+
         i.points.forEach((e , j) => {
-            //isEnd = (e.x === pathStart.x && e.y === pathStart.y) ?  true : false
-            //console.log([pathStart.x, pathStart.y],[e.x, e.y], isEnd)
-            let p= new Point(e.x, e.y, e.type, `g${idx}p${j}`)
-            if (!pathStart.x && !pathStart.y || !p.x && !p.y){
-              pathStart.x = p.x || 0;
-              pathStart.y = p.y || 0;  
-            }
-            //console.log([pathStart.x, pathStart.y], [p.x, p.y], !pathStart.x && !pathStart.y)
+            let p= new Point(e, `g${idx}p${j}`)
             pts.push(p)
         });   
-        //console.log(pts)         
-        //onsole.log(getPathData(pts))
         allPointList.push(pts)
-
+        
+        const P = new Path(pathGroup, i, i.getPath().toPathData())
+        P.id = `path${idx}`
+        allPathList.push(P)
 
         const guides = {};
         pts.reduce((acc, curr)=>{
@@ -469,11 +483,6 @@ function getPathData(pts){
         allGuideList[idx] = guides
 
 
-
-
-        const P = new Path(pathGroup, pts)
-        P.id = `path${idx}`
-        allPathList.push(P)
 
     }
 
@@ -503,10 +512,10 @@ function getPathData(pts){
 
 //    console.log(glyphArr[0])
 
-})();
+}
 
 
-svg.addEventListener('mousedown',e=>{
+addEventListener('mousedown',e=>{
     let t = e.target
     if (t.id.match(/g\d*p\d*/)){
         tempGuideData = [];
@@ -535,14 +544,14 @@ svg.addEventListener('mousedown',e=>{
     }
 }, false)
 
-svg.addEventListener('mousemove', e=>{
-    let g, pt;
-    guideCopy = tempGuideData.slice();
-
-    g = clickedP[0]
-    pt = clickedP[1]
-
+addEventListener('mousemove', e=>{
     if (dragging){
+        let g, pt;
+        guideCopy = tempGuideData.slice();
+        //console.log(tempPathData)
+        g = clickedP[0]
+        pt = clickedP[1]
+
         let point = svg.createSVGPoint();
         [point.x, point.y] = [e.clientX, e.clientY]
         let p = point.matrixTransform(inverse)
@@ -587,7 +596,7 @@ svg.addEventListener('mousemove', e=>{
     }
 }, false)
 
-svg.addEventListener('mouseup', ()=>{
+addEventListener('mouseup', ()=>{
     //clickedP = null;
     dragging = false;
     maintainOffset = false;
@@ -597,6 +606,14 @@ svg.addEventListener('mouseup', ()=>{
 addEventListener('resize',()=>{
     ctm = svg.getScreenCTM()
     inverse = ctm.inverse()
+})
+input.addEventListener('keyup',()=>{
+    text = input.value
+    drawFonts(text)
+})
+colorInput.addEventListener('input',()=>{
+    pathStyle.glyphFill = colorInput.parentNode.style.backgroundColor = colorInput.value;
+    drawFonts(text)
 })
 //mousedown으로 클릭한 점 검출
 //mousemove로 점에 관련있는 애들만 리페인트

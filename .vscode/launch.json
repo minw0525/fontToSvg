@@ -1,0 +1,30 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [        
+        {
+            "name": "Launch localhost in MS-Edge",
+            "type": "pwa-msedge",
+            "request": "launch",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}",
+            //"file": "${workspaceFolder}/index.html"
+        },
+        {
+            "name": "Launch local file in MS-Edge",
+            "type": "pwa-msedge",
+            "request": "launch",
+            "file": "${workspaceFolder}/index.html"
+        },
+        /*
+        {
+            "type": "pwa-msedge",
+            "request": "launch",
+            "name": "Open index.html",
+            "url": "http://localhost:8080",
+            "file": "/Users/minuuuu/Desktop/web/bombLink/index.html"
+        }*/
+    ]
+}
