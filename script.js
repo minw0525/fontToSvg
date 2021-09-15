@@ -20,20 +20,20 @@ let tempGuideData = [];
 let guideCopy = [];
 let storeOffset = {prev:{},next:{}};
 let scale = 1;
-let pad = 150;
+let pad = 120;
 let allPointList = [];
 let allPathList = [];
 let allGuideList = [];
 const pathStyle = {
-    rectWH: 12,
-    circleR: 7,
+    rectWH: 8,
+    circleR: 5,
     strokeColor: 'dodgerblue',
     glyphFill: colorInput.value,//'transparent',
     pointFill: 'transparent',
     handleColor: 'lightpink',
     pointColor: 'salmon',
     glyphStrokeWidth: 4,
-    guideStrokeWidth: 4,
+    guideStrokeWidth: 3,
     strokeDash: false,
     glyphLine: ()=>{
         return  {
