@@ -24,6 +24,7 @@ let pad = 120;
 let allPointList = [];
 let allPathList = [];
 let allGuideList = [];
+const hitboxGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
 const pathStyle = {
     rectWH: 8,
     circleR: 5,
@@ -47,7 +48,7 @@ const pathStyle = {
     },
     cornerPoint: ()=>{
         return {
-            'fill': pathStyle.glyphFill,
+            'fill': pathStyle.pointFill,
             'stroke': pathStyle.pointColor,
             'stroke-width': pathStyle.guideStrokeWidth
         }
@@ -65,6 +66,14 @@ const pathStyle = {
             'stroke': pathStyle.handleColor,
             'stroke-width': pathStyle.guideStrokeWidth
         }
+    },    
+    hitbox: ()=>{
+        return {
+            'fill': 'none',
+            'stroke': 'black',
+            'stroke-width': pathStyle.guideStrokeWidth * 4,
+            'stroke-opacity': 0
+        }
     }
 }
 class Point{
@@ -78,6 +87,7 @@ class Point{
         this.s = this.t==='cornerPoint' ? pathStyle.rectWH : 0
     }
     drawPoint = function(){
+
         switch (this.t) {
             case 'handlePoint':
                 this.el = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -87,6 +97,12 @@ class Point{
                     r: this.r,
                     id: this.id
                 })
+                const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+                setAttributes(use, {
+                    href : `#${this.id}`,
+                })
+                hitboxGroup.appendChild(use)
+
                 return this.el;
             case 'cornerPoint':
                 this.el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -103,6 +119,7 @@ class Point{
             default:
                 return;
         }
+        //<use xlink:href="#g0p0" stroke="black" stroke-width="25" fill="none" stroke-opacity="0"></use>
     }
     moveTo = function(x, y){
         this.x = x || 0;
@@ -213,7 +230,7 @@ class Path{
         xy = tempPathData[i[1]]
         c = xy.charAt(0)
         c = !c.match(/\d/) ? c : '';
-        xy = xy.getIdFromTarget(',');
+        xy = xy.getIdFromTarget();
         xy = c.concat([x, y].join(','))
         tempPathData[i[1]] = xy
         this.data = tempPathData.join(' ')
@@ -224,8 +241,8 @@ class Path{
         
     }
 }
-String.prototype.getIdFromTarget = function(s){
-    return this.substring(1).split(s)
+String.prototype.getIdFromTarget = function(){
+    return this.match(/\d/gm)
 }
 function round2DecPl(num){
     return Math.round(num*100)/100 
@@ -437,14 +454,12 @@ function drawFonts(textValue){
     const cornerPointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const handlePointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     pointGroup.append(cornerPointGroup, handlePointGroup)
-    svg.appendChild(pathGroup)
-    svg.appendChild(guideGroup)
-    svg.appendChild(pointGroup)
+    svg.append(pathGroup,guideGroup, pointGroup, hitboxGroup)
     setAttributes(pathGroup, pathStyle.glyphLine())
     setAttributes(guideGroup, pathStyle.handleLine())
     setAttributes(handlePointGroup, pathStyle.handlePoint())
     setAttributes(cornerPointGroup, pathStyle.cornerPoint())
-
+    setAttributes(hitboxGroup, pathStyle.hitbox())
 
 
 
@@ -517,12 +532,18 @@ function drawFonts(textValue){
 
 addEventListener('mousedown',e=>{
     let t = e.target
-    if (t.id.match(/g\d*p\d*/)){
+    console.log(t, t.id || t.getAttribute('href'))
+    if (t.getAttribute('href') ? t.getAttribute('href').match(/g\d*p\d*/) : false || t.id ? t.id.match(/g\d*p\d*/) : false){
         tempGuideData = [];
-        clickedP =  t.id.getIdFromTarget('p')
+        console.log(t.getAttribute('href') ? t.getAttribute('href').getIdFromTarget() : false)
+        console.log(t.id ? t.id.getIdFromTarget('p') : false)
+        clickedP =  t.getAttribute('href') ? t.getAttribute('href').getIdFromTarget() : false || t.id ? t.id.getIdFromTarget('p') : false
+        
+        //t.id.getIdFromTarget('p') || t.getAttribute('href').getIdFromTarget('p')
         actualClicked =  clickedP
+        console.log(clickedP)
         tempPathData = allPathList[clickedP[0]].checkMovingPoint(clickedP[1])
-        document.querySelectorAll(`.${t.id}`).forEach((v, i)=>{
+        document.querySelectorAll(`.g${clickedP[0]}p${clickedP[1]}`).forEach((v, i)=>{
             tempGuideData[i] = {};
             tempGuideData[i].x1 = v.getAttribute('x1')
             tempGuideData[i].x2 = v.getAttribute('x2')
@@ -548,7 +569,7 @@ addEventListener('mousemove', e=>{
     if (dragging){
         let g, pt;
         guideCopy = tempGuideData.slice();
-        //console.log(tempPathData)
+        console.log(tempPathData)
         g = clickedP[0]
         pt = clickedP[1]
 

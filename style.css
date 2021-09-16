@@ -55,6 +55,19 @@ input[type='color'] {
     visibility: hidden;
     box-sizing: content-box;
 }
+rect,
+circle {
+    position: relative;
+}
+rect:after,
+circle:after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    bottom: -10px;
+    right: -10px;
+}
 .bgBox {
     border: 6px solid greenyellow;
     background-color: black;
