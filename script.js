@@ -593,7 +593,7 @@ addEventListener('mousemove', e=>{
     if (screenPanning){
        // console.log(point.x, point.y, svg.getAttribute('viewBox'))
        let bBox = pathGroup.getBBox(); 
-        if (bBox.width + bBox.x > viewBoxW){
+        if (bBox.width + bBox.x > viewBoxW || svg.getAttribute('viewBox') !== '0 0 1920 1080'){
             let delta = svg.getAttribute('viewBox').split(' ') // x0 y0 w1920 h1080
             delta = [viewBoxX-(point.x - screenPanningOrigin[0]), viewBoxY+(screenPanningOrigin[1]- point.y)]
 
