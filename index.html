@@ -11,10 +11,17 @@
 
 <body>
     <svg id="typeSvg" viewBox="0 0 1920 1080"></svg>
-    <input type="text" id="textInput" placeholder="Type here">
-    <label>
-        <input type="color" id="fillColor" value="#ffffff">
-    </label>
+    <div class="inputs">
+        <input type="text" id="textInput" placeholder="Type here">
+        <div class="buttons">
+            <button class="zoom" id="zoomIn">+</button> 
+            <button class="zoom" id="zoomOut">⎻</button>
+        </div>
+        <label for="fillColor">
+            <!--<div class="colorWheel"></div>-->
+            <input type="color" id="fillColor" value="#ffffff">
+        </label>
+    </div>
     <script defer src="script.js"></script>
 </body>
 </html>    

@@ -1,18 +1,24 @@
 
 let svg = document.getElementById('typeSvg');
-const viewBoxX = 1920;
-const viewBoxY = 1080;
-svg.setAttribute('viewBox', `0 0 ${viewBoxX} ${viewBoxY}`)
+let viewBoxX = 0;
+let viewBoxY = 0;
+let viewBoxW = 1920;
+let viewBoxH = 1080;
+svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`)
 const input = document.getElementById('textInput');
 const colorInput = document.getElementById('fillColor');
-colorInput.parentNode.style.backgroundColor = colorInput.value;
+const zoomIn = document.getElementById('zoomIn');
+const zoomOut = document.getElementById('zoomOut');
 let ctm = svg.getScreenCTM();
 let inverse = ctm.inverse();
 let text = "Oo"
 let font;
 let fontSize = 500;
+let point;
 let clickedP = [];
-let dragging = false;
+let pointDragging = false;
+let screenPanning = false;
+let screenPanningOrigin = [];
 let maintainOffset = false;
 let actualClicked;
 let tempPathData = '';
@@ -20,10 +26,13 @@ let tempGuideData = [];
 let guideCopy = [];
 let storeOffset = {prev:{},next:{}};
 let scale = 1;
-let pad = 120;
+const marginT = 200;
+let padL = 120;
+let padT = 120;
 let allPointList = [];
 let allPathList = [];
 let allGuideList = [];
+let pathGroup, guideGroup, cornerPointGroup, handlePointGroup;
 const hitboxGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
 const pathStyle = {
     rectWH: 8,
@@ -41,30 +50,33 @@ const pathStyle = {
             'fill': pathStyle.glyphFill,
             'stroke': pathStyle.strokeColor,
             'stroke-width': pathStyle.glyphStrokeWidth,
-            'stroke-linecap': "miter",
-            'stroke-dasharray': pathStyle.strokeDash
-            //'style': 'transform : scaleY(-1) translateY(-50%)'
+            'stroke-linecap': "round",
+            'stroke-dasharray': pathStyle.strokeDash,
+            id: 'glyphPath'
         }
     },
     cornerPoint: ()=>{
         return {
             'fill': pathStyle.pointFill,
             'stroke': pathStyle.pointColor,
-            'stroke-width': pathStyle.guideStrokeWidth
+            'stroke-width': pathStyle.guideStrokeWidth,
+            id: 'rectPoint'
         }
     },
     handleLine: ()=>{
         return {
             'fill': pathStyle.pointFill,
             'stroke': pathStyle.handleColor,
-            'stroke-width': pathStyle.guideStrokeWidth
+            'stroke-width': pathStyle.guideStrokeWidth,
+            id: 'guideLine'
         }
     },
     handlePoint: ()=>{
         return {
             'fill': pathStyle.pointFill,
             'stroke': pathStyle.handleColor,
-            'stroke-width': pathStyle.guideStrokeWidth
+            'stroke-width': pathStyle.guideStrokeWidth,
+            id: 'circlePoint'
         }
     },    
     hitbox: ()=>{
@@ -119,11 +131,11 @@ class Point{
             default:
                 return;
         }
-        //<use xlink:href="#g0p0" stroke="black" stroke-width="25" fill="none" stroke-opacity="0"></use>
     }
     moveTo = function(x, y){
         this.x = x || 0;
         this.y = y || 0;
+        this.s = pathStyle.rectWH
         if(this.el){
             switch (this.el.tagName) {
                 case 'circle':
@@ -242,7 +254,7 @@ class Path{
     }
 }
 String.prototype.getIdFromTarget = function(){
-    return this.match(/\d/gm)
+    return this.match(/\d{1,}/gm)
 }
 function round2DecPl(num){
     return Math.round(num*100)/100 
@@ -329,6 +341,7 @@ const scaleGlyphs = function(scale){
     return function(command){
         const cloned = _assign({}, command);
         for(let key in cloned){
+            let pad = (key === 'x' || key === 'x1' || key === 'x2') ? padL + viewBoxX : padT - marginT + viewBoxY
             if (typeof(cloned[key]) === 'number') cloned[key] = round2DecPl( cloned[key] * scale + pad);
         }
         return cloned;
@@ -417,8 +430,10 @@ function drawFonts(textValue){
         return [curr, l] 
     },[])[1]
 
-    let scaleX = ((viewBoxX - pad*2) / totalWidth)//.toFixed(2)
-    scale = scaleX < 0.7 ? scaleX : 0.7
+    let scaleX = ((viewBoxW - padL*2) / totalWidth)//.toFixed(2)
+    //scale = innerWidth < innerHeight ? 1 : (scaleX < 0.7 ? scaleX : 0.7)
+    scale = round2DecPl(innerWidth < innerHeight ? (scaleX < 1 ? scaleX : 1 ): ( scaleX < 0.7 ? scaleX : 0.7))
+    padT = ( viewBoxH - scale * 1000 ) / 2
     /*glyphArr.forEach((e,)=>{
         console.log(e.path)
         console.log('getPath', e.getPath())
@@ -448,11 +463,11 @@ function drawFonts(textValue){
     //console.log(glyphArr[0].commands[0])
     //console.log(glyphArr[1].commands[0])
 
-    const pathGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const pointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const guideGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const cornerPointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const handlePointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    pathGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    pointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    guideGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    cornerPointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    handlePointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     pointGroup.append(cornerPointGroup, handlePointGroup)
     svg.append(pathGroup,guideGroup, pointGroup, hitboxGroup)
     setAttributes(pathGroup, pathStyle.glyphLine())
@@ -532,6 +547,9 @@ function drawFonts(textValue){
 
 addEventListener('mousedown',e=>{
     let t = e.target
+    point = svg.createSVGPoint();
+    [point.x, point.y] = [e.clientX, e.clientY]
+    point = point.matrixTransform(inverse)
     console.log(t, t.id || t.getAttribute('href'))
     if (t.getAttribute('href') ? t.getAttribute('href').match(/g\d*p\d*/) : false || t.id ? t.id.match(/g\d*p\d*/) : false){
         tempGuideData = [];
@@ -541,7 +559,7 @@ addEventListener('mousedown',e=>{
         
         //t.id.getIdFromTarget('p') || t.getAttribute('href').getIdFromTarget('p')
         actualClicked =  clickedP
-        console.log(clickedP)
+        console.log(t, clickedP)
         tempPathData = allPathList[clickedP[0]].checkMovingPoint(clickedP[1])
         document.querySelectorAll(`.g${clickedP[0]}p${clickedP[1]}`).forEach((v, i)=>{
             tempGuideData[i] = {};
@@ -551,7 +569,7 @@ addEventListener('mousedown',e=>{
             tempGuideData[i].y2 = v.getAttribute('y2')
             tempGuideData[i][0] = v.getAttribute('class')
         })
-        dragging = true;
+        pointDragging = true;
         let prev = allPointList[clickedP[0]][clickedP[1] * 1 - 1]||0
         let next = allPointList[clickedP[0]][clickedP[1] * 1 + 1]||0
         if(allPointList[clickedP[0]][clickedP[1]].t === 'cornerPoint' ){
@@ -562,30 +580,56 @@ addEventListener('mousedown',e=>{
             storeOffset.next.yOffset = allPointList[clickedP[0]][clickedP[1]].y - next.y;
         }
         //console.log(clickedP)
+    }else if (t.id === 'typeSvg'){
+        screenPanning = true;
+        screenPanningOrigin = [point.x, point.y]
+        console.log(screenPanningOrigin)
     }
 }, false)
 
 addEventListener('mousemove', e=>{
-    if (dragging){
+    point ? [point.x, point.y] = [e.clientX, e.clientY] : point
+    point ? point = point.matrixTransform(inverse) : point
+    if (screenPanning){
+       // console.log(point.x, point.y, svg.getAttribute('viewBox'))
+       let bBox = pathGroup.getBBox(); 
+        if (bBox.width + bBox.x > viewBoxW){
+            let delta = svg.getAttribute('viewBox').split(' ') // x0 y0 w1920 h1080
+            delta = [viewBoxX-(point.x - screenPanningOrigin[0]), viewBoxY+(screenPanningOrigin[1]- point.y)]
+
+            viewBoxX = delta[0] >= bBox.x * -1
+                ? delta[0] <= (bBox.x * 1 + bBox.width - viewBoxX)|0
+                    ? delta[0]
+                    : (bBox.x * 1 + bBox.width - viewBoxX)|0
+                : bBox.x * -1
+            viewBoxY = delta[1] >= bBox.y * -1
+                ? delta[1] <= (bBox.y * 2 + bBox.height - viewBoxY/2)|0
+                    ? delta[1]
+                    : (bBox.y * 2 + bBox.height - viewBoxY/2)|0
+                : bBox.y * -1
+
+
+            svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`)
+            screenPanningOrigin = [point.x, point.y]
+
+        }
+
+    }
+    if (pointDragging){
         let g, pt;
         guideCopy = tempGuideData.slice();
-        console.log(tempPathData)
         g = clickedP[0]
         pt = clickedP[1]
 
-        let point = svg.createSVGPoint();
-        [point.x, point.y] = [e.clientX, e.clientY]
-        let p = point.matrixTransform(inverse)
-
         let prev = allPointList[g][pt * 1 - 1] || 0;
         let next = allPointList[g][pt * 1 + 1] || 0;
-        allPathList[g].movePointTo(clickedP, p.x, p.y)
+        allPathList[g].movePointTo(clickedP, point.x, point.y)
 
         if (maintainOffset){
             
             if(next.t && next.t === 'handlePoint'){ 
-                let nextX = p.x - storeOffset.next.xOffset;
-                let nextY = p.y - storeOffset.next.yOffset;
+                let nextX = point.x - storeOffset.next.xOffset;
+                let nextY = point.y - storeOffset.next.yOffset;
                 let i = [g, (pt * 1 + 1).toString()]
                 allPathList[g].movePointTo(i, nextX, nextY)
 
@@ -597,8 +641,8 @@ addEventListener('mousemove', e=>{
             };
 
             if(prev.t && prev.t === 'handlePoint'){ 
-                let prevX = p.x - storeOffset.prev.xOffset;
-                let prevY = p.y - storeOffset.prev.yOffset;
+                let prevX = point.x - storeOffset.prev.xOffset;
+                let prevY = point.y - storeOffset.prev.yOffset;
                 let i = [g, (pt * 1 - 1).toString()]
                 allPathList[g].movePointTo(i, prevX, prevY)
 
@@ -611,7 +655,7 @@ addEventListener('mousemove', e=>{
 
         }else {
             //console.log(allGuideList[g][guideCopy.slice(-1)[0][0]])
-            allGuideList[g][guideCopy.slice(-1)[0][0]].movePointTo(clickedP, p.x, p.y)
+            allGuideList[g][guideCopy.slice(-1)[0][0]].movePointTo(clickedP, point.x, point.y)
             guideCopy.pop()
         }
     }
@@ -619,9 +663,13 @@ addEventListener('mousemove', e=>{
 
 addEventListener('mouseup', ()=>{
     //clickedP = null;
-    dragging = false;
+    pointDragging = false;
+    screenPanning = false
     maintainOffset = false;
 //    tempGuideData = [];
+
+ctm = svg.getScreenCTM()
+inverse = ctm.inverse()
 }, false)
 
 addEventListener('resize',()=>{
@@ -633,10 +681,86 @@ input.addEventListener('keyup',()=>{
     drawFonts(text)
 })
 colorInput.addEventListener('input',()=>{
-    pathStyle.glyphFill = colorInput.parentNode.style.backgroundColor = colorInput.value;
-    drawFonts(text)
+    pathStyle.glyphFill = colorInput.value;
+    document.getElementById('glyphPath').setAttribute('fill', pathStyle.glyphFill)
 })
+zoomIn.addEventListener('click',(e)=>{
+    zoom(e.target.id)
+})
+zoomOut.addEventListener('click',(e)=>{
+    zoom(e.target.id)
+})
+
+function zoom(id){
+    id === 'zoomIn' ? ( 
+        console.log(id),  
+        viewBoxW *= 0.8, viewBoxH *= 0.8 , 
+        svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${round2DecPl(viewBoxW)} ${round2DecPl(viewBoxH)}`),
+        pathStyle.circleR *= 0.8,
+        pathStyle.rectWH *= 0.8,
+        pathStyle.glyphStrokeWidth *= 0.8,
+        pathStyle.guideStrokeWidth *= 0.8,    
+        document.querySelectorAll('rect').forEach(e=>{
+            setAttributes(e, {
+                x :  e.getAttribute('x') * 1 + 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                y :  e.getAttribute('y') * 1 + 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                width: pathStyle.rectWH,
+                height: pathStyle.rectWH
+            })
+        }),
+        document.querySelectorAll('circle').forEach(e=>{
+            setAttributes(e, {
+                r: pathStyle.circleR,
+            })
+        }),
+        pathGroup.setAttribute('stroke-width', pathStyle.glyphStrokeWidth),
+        guideGroup.setAttribute('stroke-width', pathStyle.guideStrokeWidth),  
+        setAttributes(handlePointGroup, pathStyle.handlePoint()),
+        setAttributes(cornerPointGroup, pathStyle.cornerPoint()),                 
+        setAttributes(hitboxGroup, pathStyle.hitbox())
+    ) : id==='zoomOut' ? ( 
+        console.log(id), 
+        viewBoxW *= 1.25, 
+        viewBoxH *= 1.25 , 
+        svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${round2DecPl(viewBoxW)} ${round2DecPl(viewBoxH)}`),
+        pathStyle.circleR *= 1.25,
+        pathStyle.rectWH *= 1.25,
+        pathStyle.glyphStrokeWidth *= 1.25,
+        pathStyle.guideStrokeWidth *= 1.25,    
+        document.querySelectorAll('rect').forEach(e=>{
+            setAttributes(e, {
+                x :  this.x - pathStyle.rectWH/2,
+                y :  this.y - pathStyle.rectWH/2,
+                x :  e.getAttribute('x') * 1 - 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                y :  e.getAttribute('y') * 1 - 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                width: pathStyle.rectWH,
+                height: pathStyle.rectWH
+            })
+        }),
+        document.querySelectorAll('circle').forEach(e=>{
+            setAttributes(e, {
+                r: pathStyle.circleR,
+            })
+        }),
+        pathGroup.setAttribute('stroke-width', pathStyle.glyphStrokeWidth),
+        guideGroup.setAttribute('stroke-width', pathStyle.guideStrokeWidth),    
+        setAttributes(handlePointGroup, pathStyle.handlePoint()),
+        setAttributes(cornerPointGroup, pathStyle.cornerPoint()),           
+        setAttributes(hitboxGroup, pathStyle.hitbox())
+        ) :  false 
+    ctm = svg.getScreenCTM()
+    inverse = ctm.inverse()
+}
 //mousedown으로 클릭한 점 검출
 //mousemove로 점에 관련있는 애들만 리페인트
 //우선 배열에 넣어야겠네 그럼
 
+
+
+/*
+
+
+
+
+
+*/
