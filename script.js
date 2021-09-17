@@ -83,7 +83,7 @@ const pathStyle = {
         return {
             'fill': 'none',
             'stroke': 'black',
-            'stroke-width': pathStyle.guideStrokeWidth * 4,
+            'stroke-width': pathStyle.guideStrokeWidth * 5,
             'stroke-opacity': 0
         }
     }
@@ -337,6 +337,53 @@ Node.prototype.empty = function(){
 const isntNaN = function isntNaN(value) {
     return !isNaN(value);
 };
+function RGBToHSL(r,g,b) {
+    // Make r, g, and b fractions of 1
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    // Find greatest and smallest channel values
+    let cmin = Math.min(r,g,b),
+        cmax = Math.max(r,g,b),
+        delta = cmax - cmin,
+        h = 0,
+        s = 0,
+        l = 0;
+
+    // Calculate hue
+    // No difference
+    if (delta == 0)
+        h = 0;
+    // Red is max
+    else if (cmax == r)
+        h = ((g - b) / delta) % 6;
+    // Green is max
+    else if (cmax == g)
+        h = (b - r) / delta + 2;
+    // Blue is max
+    else
+        h = (r - g) / delta + 4;
+
+    h = Math.round(h * 60);
+        
+    // Make negative hues positive behind 360°
+    if (h < 0)
+        h += 360;
+    // Calculate lightness
+    l = (cmax + cmin) / 2;
+
+    // Calculate saturation
+    s = delta == 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+        
+    // Multiply l and s by 100
+    s = +(s * 100).toFixed(1);
+    l = +(l * 100).toFixed(1);
+
+    return [h, s, l]
+}
+
+
 const scaleGlyphs = function(scale){
     return function(command){
         const cloned = _assign({}, command);
@@ -469,7 +516,7 @@ function drawFonts(textValue){
     cornerPointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     handlePointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     pointGroup.append(cornerPointGroup, handlePointGroup)
-    svg.append(pathGroup,guideGroup, pointGroup, hitboxGroup)
+    svg.append(pathGroup, guideGroup, pointGroup, hitboxGroup)
     setAttributes(pathGroup, pathStyle.glyphLine())
     setAttributes(guideGroup, pathStyle.handleLine())
     setAttributes(handlePointGroup, pathStyle.handlePoint())
@@ -681,8 +728,33 @@ input.addEventListener('keyup',()=>{
     drawFonts(text)
 })
 colorInput.addEventListener('input',()=>{
+    let r = '0x'.concat(colorInput.value.substring(1).slice(0,2))
+    let g = '0x'.concat(colorInput.value.substring(1).slice(2,4))
+    let b = '0x'.concat(colorInput.value.substring(1).slice(4,6))
+    let hsl = RGBToHSL(r, g, b)
+
+    // selected r g b
+    // complementary r1 g1 b1
+    // tet1 = r1 g2 b
+    // tet2 = r g2 b1
+    //console.log(comp, t1, t2)
     pathStyle.glyphFill = colorInput.value;
+    pathStyle.strokeColor = `hsl(${Math.abs(250 - hsl[0])} ${(120 - hsl[1] * 0.6)}% ${100-(hsl[2]||100)}%)`;
+    pathStyle.handleColor = `hsl(${Math.abs(240 - hsl[0])} ${70 - hsl[1] * 0.5}% ${hsl[2]*0.2+40}%)`;
+    pathStyle.pointColor = `hsl(${Math.abs(345 - hsl[0])} ${70 - hsl[1]* 0.5}% ${hsl[2]*0.2+40}%)`;
+
     document.getElementById('glyphPath').setAttribute('fill', pathStyle.glyphFill)
+
+    document.getElementById('glyphPath').setAttribute('stroke', pathStyle.strokeColor)
+
+    document.getElementById('guideLine').setAttribute('stroke', pathStyle.handleColor)
+    document.getElementById('circlePoint').setAttribute('stroke', pathStyle.handleColor)
+
+    document.getElementById('rectPoint').setAttribute('stroke', pathStyle.pointColor)    
+
+    //document.body.style.backgroundColor = `hsl(${hsl[0]+50} ${hsl[1]||0}% ${100-hsl[2]||100}%)`
+    input.style.borderColor = pathStyle.strokeColor
+    input.style.color = pathStyle.strokeColor
 })
 zoomIn.addEventListener('click',(e)=>{
     zoom(e.target.id)
@@ -751,16 +823,3 @@ function zoom(id){
     ctm = svg.getScreenCTM()
     inverse = ctm.inverse()
 }
-//mousedown으로 클릭한 점 검출
-//mousemove로 점에 관련있는 애들만 리페인트
-//우선 배열에 넣어야겠네 그럼
-
-
-
-/*
-
-
-
-
-
-*/

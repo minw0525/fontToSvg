@@ -5,13 +5,13 @@
     font-weight: 100;
     font-size: 5vh;
     box-sizing: border-box;
-    color: white;
+    color: black;
 }
 
 body {
     width: 100vw;
     height: 100vh;
-    background: black;
+    background: white;
 }
 svg {
     width: 100%;
@@ -55,7 +55,7 @@ input[type='text']::-webkit-input-placeholder {
     bottom: 160px;
     display: flex;
     flex-direction: column;
-    box-shadow: #00a 0px 3px 7px 1px;
+    box-shadow: #aaa 0px 3px 7px 1px;
 }
 button {
     height: 50px;
@@ -78,7 +78,7 @@ label {
     width: 64px;
     height: 64px;
     box-sizing: border-box;
-    box-shadow: #00a 0px 3px 7px 1px;
+    box-shadow: #aaa 0px 3px 7px 1px;
     cursor: pointer;
     position: fixed;
     right: 30px;
