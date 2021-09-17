@@ -5,13 +5,13 @@
     font-weight: 100;
     font-size: 5vh;
     box-sizing: border-box;
-    color: lime;
+    color: white;
 }
 
 body {
     width: 100vw;
     height: 100vh;
-    background: blue;
+    background: black;
 }
 svg {
     width: 100%;
@@ -27,7 +27,7 @@ svg {
 input[type='text'] {
     box-sizing: border-box;
     position: relative;
-    border: 2px solid lime;
+    border: 2px solid white;
     border-top: none;
     border-left: none;
     border-right: none;
@@ -39,13 +39,13 @@ input[type='text']:focus-visible {
     outline: none;
 }
 input[type='text']::placeholder {
-    color: lightgreen;
+    color: slategrey;
 }
 input[type='text']::-moz-placeholder {
-    color: lightgreen;
+    color: slategrey;
 }
 input[type='text']::-webkit-input-placeholder {
-    color: lightgreen;
+    color: slategrey;
 }
 .buttons {
     position: fixed;
