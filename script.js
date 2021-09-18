@@ -472,7 +472,6 @@ function drawFonts(textValue){
 
     let totalWidth = glyphArr.reduce((acc, curr)=>{
         let prev = acc.slice(-1)[0]
-        console.log(acc)
         l = prev ? prev + (font.getKerningValue(acc[0],curr) || 0) + (font.letterSpacing || 0) + curr.advanceWidth : curr.advanceWidth
         return [curr, l] 
     },[])[1]

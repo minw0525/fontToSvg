@@ -107,14 +107,14 @@ label::before {
     );
     background-clip: padding-box;
     clip-path: circle(50%);
-    filter: saturate(0.6) brightness(1.5) blur(6px);
+    filter: saturate(0.6) brightness(1.5) blur(5px);
 }
 label:active {
     background-image: linear-gradient(#ccc, #eee);
     box-shadow: #aaa 0px 3px 7px 1px;
 }
 label:active::before {
-    filter: saturate(0.6) brightness(0.8) blur(6px);
+    filter: saturate(0.6) brightness(0.8) blur(5px);
 }
 input[type='color'] {
     visibility: hidden;
