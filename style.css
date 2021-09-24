@@ -70,6 +70,10 @@ button {
 button:active {
     background: linear-gradient(#ddd, #aaa 15%, #ccc, #aaa 85%, #ddd);
 }
+label,
+button {
+    cursor: pointer;
+}
 label {
     display: inline-flex;
     align-items: center;
@@ -79,7 +83,6 @@ label {
     height: 64px;
     box-sizing: border-box;
     box-shadow: #aaa 0px 3px 7px 1px;
-    cursor: pointer;
     position: fixed;
     right: 30px;
     bottom: 70px;

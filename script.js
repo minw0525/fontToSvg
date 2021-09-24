@@ -17,9 +17,11 @@ let fontSize = 500;
 let point;
 let clickedP = [];
 let pointDragging = false;
+let pathDragging = false;
 let screenPanning = false;
-let screenPanningOrigin = [];
+let clickedOrigin = [];
 let maintainOffset = false;
+let bezierT;
 let actualClicked;
 let tempPathData = '';
 let tempGuideData = [];
@@ -32,7 +34,8 @@ let padT = 120;
 let allPointList = [];
 let allPathList = [];
 let allGuideList = [];
-let pathGroup, guideGroup, cornerPointGroup, handlePointGroup;
+let allShadowPathList = [];
+let pathGroup, guideGroup, cornerPointGroup, handlePointGroup, shadowPathGroup;
 const hitboxGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
 const pathStyle = {
     rectWH: 8,
@@ -85,6 +88,14 @@ const pathStyle = {
             'stroke': 'black',
             'stroke-width': pathStyle.guideStrokeWidth * 5,
             'stroke-opacity': 0
+        }
+    },
+    shadowPath: ()=>{
+        return {
+            'fill': 'none',
+            'stroke': 'black',
+            'stroke-width': pathStyle.guideStrokeWidth * 5,
+            'stroke-opacity': 1
         }
     }
 }
@@ -221,8 +232,7 @@ class Guide{
 class Path{
     constructor(group, i, pData){
         this.group = group;
-        this.points = i.points;
-        this.data = getPathData(i.commands)
+        this.data = pData ? pData : getPathData(i.commands)
     }
     path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     drawPath = function(){
@@ -232,10 +242,7 @@ class Path{
         this.group.appendChild(this.path);
     }
     checkMovingPoint = function(){
-        let points
-        points = this.data.split(/\s{1,}/)
-        return points
-        //s = i.split('p')[1]
+        return this.data.split(/\s{1,}/).filter((v,i) => {return v})
     }
     movePointTo = function(i, x, y){
         let c, xy
@@ -382,7 +389,59 @@ function RGBToHSL(r,g,b) {
 
     return [h, s, l]
 }
+function cuberoot(x) {
+    var y = Math.pow(Math.abs(x), 1/3);
+    return x < 0 ? -y : y;
+}
 
+function solveCubic(a, b, c, d) {
+    if (Math.abs(a) < 1e-8) { // Quadratic case, ax^2+bx+c=0
+        a = b; b = c; c = d;
+        if (Math.abs(a) < 1e-8) { // Linear case, ax+b=0
+            a = b; b = c;
+            if (Math.abs(a) < 1e-8) // Degenerate case
+                return [];
+            return [-b/a];
+        }
+
+        var D = b*b - 4*a*c;
+        if (Math.abs(D) < 1e-8)
+            return [-b/(2*a)];
+        else if (D > 0)
+            return [(-b+Math.sqrt(D))/(2*a), (-b-Math.sqrt(D))/(2*a)];
+        return [];
+    }
+
+    // Convert to depressed cubic t^3+pt+q = 0 (subst x = t - b/3a)
+    var p = (3*a*c - b*b)/(3*a*a);
+    var q = (2*b*b*b - 9*a*b*c + 27*a*a*d)/(27*a*a*a);
+    var roots;
+
+    if (Math.abs(p) < 1e-8) { // p = 0 -> t^3 = -q -> t = -q^1/3
+        roots = [cuberoot(-q)];
+    } else if (Math.abs(q) < 1e-8) { // q = 0 -> t^3 + pt = 0 -> t(t^2+p)=0
+        roots = [0].concat(p < 0 ? [Math.sqrt(-p), -Math.sqrt(-p)] : []);
+    } else {
+        var D = q*q/4 + p*p*p/27;
+        if (Math.abs(D) < 1e-8) {       // D = 0 -> two roots
+            roots = [-1.5*q/p, 3*q/p];
+        } else if (D > 0) {             // Only one real root
+            var u = cuberoot(-q/2 - Math.sqrt(D));
+            roots = [u - p/(3*u)];
+        } else {                        // D < 0, three roots, but needs to use complex numbers/trigonometric solution
+            var u = 2*Math.sqrt(-p/3);
+            var t = Math.acos(3*q/p/u)/3;  // D < 0 implies p < 0 and acos argument in [-1..1]
+            var k = 2*Math.PI/3;
+            roots = [u*Math.cos(t), u*Math.cos(t-k), u*Math.cos(t-2*k)];
+        }
+    }
+
+    // Convert back from depressed cubic
+    for (var i = 0; i < roots.length; i++)
+        roots[i] -= b/(3*a);
+
+    return roots;
+}
 
 const scaleGlyphs = function(scale){
     return function(command){
@@ -434,14 +493,27 @@ function commandToPoints(n, arr){
     })
     return arr
 }
-
 function getPoints(commands){
     return commands.map((v)=>{
         const pointArr = []
         return commandToPoints(v, pointArr)
     }).flat()
 }
+function getShadowPaths(commands){
+    const shadows = [];
+    let temp, prevX, prevY;
+    commands.reduce((acc, curr)=>{
+        acc ? (prevX = acc[0], prevY = acc[1]) : (prevX = null, prevY = null)
+        let t = curr.type;
+        let x = curr.x;
+        let y = curr.y
 
+        temp = t === 'C' ? `M${prevX},${prevY} C${curr.x1},${curr.y1} ${curr.x2},${curr.y2} ${curr.x},${curr.y}` : t === 'L' ? `M${prevX},${prevY} L${x},${y}` : ''
+        shadows.push(temp)
+        return [curr.x, curr.y]
+    },[])
+    return shadows.filter((v,i)=>{return v})
+}
 function getPathData(commands){
     for (var t = "", i = 0; i < commands.length; i ++) {
         var n = commands[i];
@@ -449,7 +521,24 @@ function getPathData(commands){
     }
     return t
 }
-
+function pathDataToPoints(arr){
+    return arr.map(v=>{
+        c = v.charAt(0)
+        c = !c.match(/\d/) ? c : '';
+        if(v.match(/\d{1,}\.?\d{1,}/gm)){
+            return {
+                c: c=== 'M' || c === 'L' ? 'cornerPoint' : 'handlePoint' ,
+                x: v.match(/\d{1,}\.?\d{1,}/gm)[0],
+                y: v.match(/\d{1,}\.?\d{1,}/gm)[1]
+            }
+        }else{
+            return {
+                c: 'pathEnd' 
+            }
+        }
+        
+    })
+}
 (async function initFont(){
     font = await opentype.load('https://parkminwoo.com/font/Hesiod-Regular.otf');
     drawFonts(text)
@@ -514,14 +603,15 @@ function drawFonts(textValue){
     guideGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     cornerPointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     handlePointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    shadowPathGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     pointGroup.append(cornerPointGroup, handlePointGroup)
-    svg.append(pathGroup, guideGroup, pointGroup, hitboxGroup)
+    svg.append(pathGroup, hitboxGroup, shadowPathGroup, guideGroup, pointGroup)
     setAttributes(pathGroup, pathStyle.glyphLine())
     setAttributes(guideGroup, pathStyle.handleLine())
     setAttributes(handlePointGroup, pathStyle.handlePoint())
     setAttributes(cornerPointGroup, pathStyle.cornerPoint())
     setAttributes(hitboxGroup, pathStyle.hitbox())
-
+    setAttributes(shadowPathGroup, pathStyle.shadowPath())
 
 
     //get points from glyphArray    
@@ -536,7 +626,20 @@ function drawFonts(textValue){
         });   
         allPointList.push(pts)
         
-        const P = new Path(pathGroup, i, i.getPath().toPathData())
+        const shadowPaths = getShadowPaths(i.commands)
+        const shadowGlyph = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        shadowPathGroup.append(shadowGlyph)
+
+        const shadows = [];
+        shadowPaths.forEach((v,j)=>{
+            const S = new Path(shadowGlyph, {}, v)
+            S.path.classList.add('shadow')
+            S.path.id = `g${idx}s${j}`
+            S.drawPath()
+            shadows.push(S)
+        })
+        allShadowPathList.push(shadows)
+        const P = new Path(pathGroup, i)
         P.id = `path${idx}`
         allPathList.push(P)
 
@@ -561,6 +664,7 @@ function drawFonts(textValue){
 
 
     }
+
 
     //draw points
     allPointList.forEach(v=>{
@@ -596,17 +700,35 @@ addEventListener('mousedown',e=>{
     point = svg.createSVGPoint();
     [point.x, point.y] = [e.clientX, e.clientY]
     point = point.matrixTransform(inverse)
-    console.log(t, t.id || t.getAttribute('href'))
-    if (t.getAttribute('href') ? t.getAttribute('href').match(/g\d*p\d*/) : false || t.id ? t.id.match(/g\d*p\d*/) : false){
+    console.log(t, point.x, point.y)
+    if (t.classList[0] === 'shadow'){
+        //let x0, y0, x1, y1, x2, y2, x3, y3;
+        pathDragging = true;
+        clickedOrigin = [point.x, point.y]
+        clickedP = t.id.getIdFromTarget()
+        tempPathData = allShadowPathList[clickedP[0]][clickedP[1]]
+        console.log(tempPathData.checkMovingPoint())
+        let tempPoints = pathDataToPoints(tempPathData.checkMovingPoint())
+        console.log(tempPoints)
+        let [x0, y0] = [tempPoints[0].x, tempPoints[0].y];
+        let [x1, y1] = [tempPoints[1].x, tempPoints[1].y];
+        let [x2, y2] = tempPoints[2] ? [tempPoints[2].x, tempPoints[2].y] : [undefined, undefined];
+        let [x3, y3] = tempPoints[3] ? [tempPoints[3].x, tempPoints[3].y] : [undefined, undefined];
+
+        tX = solveCubic((x3-3*x2 + 3* x1 - x0), (3*x2 - 6 * x1 + 3 * x0), 3*(x1 - x0),x0 - point.x ).filter(v=> v>=0 && v<=1)[0]
+        tY = solveCubic((y3-3*y2 + 3* y1 - y0), (3*y2 - 6 * y1 + 3 * y0), 3*(y1 - y0),y0 - point.y ).filter(v=> v>=0 && v<=1)[0]
+        bezierT = (tX + tY) / 2
+
+    }else if (t.getAttribute('href') ? t.getAttribute('href').match(/g\d*p\d*/) : false || t.id ? t.id.match(/g\d*p\d*/) : false){
         tempGuideData = [];
         console.log(t.getAttribute('href') ? t.getAttribute('href').getIdFromTarget() : false)
-        console.log(t.id ? t.id.getIdFromTarget('p') : false)
-        clickedP =  t.getAttribute('href') ? t.getAttribute('href').getIdFromTarget() : false || t.id ? t.id.getIdFromTarget('p') : false
+        console.log(t.id ? t.id.getIdFromTarget() : false)
+        clickedP =  t.getAttribute('href') ? t.getAttribute('href').getIdFromTarget() : false || t.id ? t.id.getIdFromTarget() : false
         
         //t.id.getIdFromTarget('p') || t.getAttribute('href').getIdFromTarget('p')
         actualClicked =  clickedP
         console.log(t, clickedP)
-        tempPathData = allPathList[clickedP[0]].checkMovingPoint(clickedP[1])
+        tempPathData = allPathList[clickedP[0]].checkMovingPoint()
         document.querySelectorAll(`.g${clickedP[0]}p${clickedP[1]}`).forEach((v, i)=>{
             tempGuideData[i] = {};
             tempGuideData[i].x1 = v.getAttribute('x1')
@@ -626,22 +748,58 @@ addEventListener('mousedown',e=>{
             storeOffset.next.yOffset = allPointList[clickedP[0]][clickedP[1]].y - next.y;
         }
         //console.log(clickedP)
+
     }else if (t.id === 'typeSvg'){
         screenPanning = true;
-        screenPanningOrigin = [point.x, point.y]
-        console.log(screenPanningOrigin)
+        clickedOrigin = [point.x, point.y]
     }
 }, false)
 
 addEventListener('mousemove', e=>{
     point ? [point.x, point.y] = [e.clientX, e.clientY] : point
     point ? point = point.matrixTransform(inverse) : point
+    if(pathDragging){
+        t = bezierT;
+        s = 1-bezierT;
+        let tempPoints = pathDataToPoints(tempPathData.checkMovingPoint())
+        if (tempPoints.length === 4){            
+            let [P0, P1, P2, P3] = tempPoints;
+            //console.log(P0, P1, P2, P3)
+            let dx = clickedOrigin[0] - point.x;
+            let dy = clickedOrigin[1] - point.y;
+            let co1 = 3 * s * s * t
+            let co2 = 3 * s * t * t
+            //console.log(dx, dy, co1, co2)
+            P1.x = P1.x * 1 - dx *(1 + co1)
+            P1.y = P1.y * 1 - dy *(1 + co1)
+            P2.x = P2.x * 1 - dx *(1 + co2)
+            P2.y = P2.y * 1 - dy *(1 + co2)
+            
+            //console.log(P1, P2)
+            let data  = `M${round2DecPl(tempPoints[0].x)},${tempPoints[0].y} C${round2DecPl(P1.x)},${round2DecPl(P1.y)} ${round2DecPl(P2.x)},${round2DecPl(P2.y)} ${round2DecPl(tempPoints[3].x)},${round2DecPl(tempPoints[3].y)}`
+            
+            allShadowPathList[clickedP[0]][clickedP[1]].path.setAttribute('d', data)
+        }else if (tempPoints.length === 2){
+            let [P0, P1] = tempPoints;
+            let dx = clickedOrigin[0] - point.x;
+            let dy = clickedOrigin[1] - point.y;
+            P0.x = P0.x * 1 - dx
+            P0.y = P0.y * 1 - dy
+            P1.x = P1.x * 1 - dx
+            P1.y = P1.y * 1 - dy
+            let data  = `M${round2DecPl(P0.x)},${P0.y} L${round2DecPl(P1.x)},${round2DecPl(P1.y)}`
+            allShadowPathList[clickedP[0]][clickedP[1]].path.setAttribute('d', data)
+        }
+
+
+    }
+
     if (screenPanning){
        // console.log(point.x, point.y, svg.getAttribute('viewBox'))
        let bBox = pathGroup.getBBox(); 
         if (bBox.width + bBox.x > viewBoxW || svg.getAttribute('viewBox') !== '0 0 1920 1080'){
             let delta = svg.getAttribute('viewBox').split(' ') // x0 y0 w1920 h1080
-            delta = [viewBoxX-(point.x - screenPanningOrigin[0]), viewBoxY+(screenPanningOrigin[1]- point.y)]
+            delta = [viewBoxX-(point.x - clickedOrigin[0]), viewBoxY+(clickedOrigin[1]- point.y)]
 
             viewBoxX = delta[0] >= bBox.x * -1
                 ? delta[0] <= (bBox.x * 1 + bBox.width - viewBoxX)|0
@@ -656,11 +814,12 @@ addEventListener('mousemove', e=>{
 
 
             svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}`)
-            screenPanningOrigin = [point.x, point.y]
+            clickedOrigin = [point.x, point.y]
 
         }
 
     }
+
     if (pointDragging){
         let g, pt;
         guideCopy = tempGuideData.slice();
@@ -708,15 +867,21 @@ addEventListener('mousemove', e=>{
 }, false)
 
 addEventListener('mouseup', ()=>{
+    if (clickedP&&pathDragging){
+        tempPathData.data = allShadowPathList[clickedP[0]][clickedP[1]].path.getAttribute('d')
+    }
     //clickedP = null;
     pointDragging = false;
+    pathDragging = false;
     screenPanning = false
     maintainOffset = false;
 //    tempGuideData = [];
-
-ctm = svg.getScreenCTM()
-inverse = ctm.inverse()
+    ctm = svg.getScreenCTM()
+    inverse = ctm.inverse()
 }, false)
+
+
+
 
 addEventListener('resize',()=>{
     ctm = svg.getScreenCTM()
@@ -773,8 +938,8 @@ function zoom(id){
         pathStyle.guideStrokeWidth *= 0.8,    
         document.querySelectorAll('rect').forEach(e=>{
             setAttributes(e, {
-                x :  e.getAttribute('x') * 1 + 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
-                y :  e.getAttribute('y') * 1 + 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                x :  e.getAttribute('x') * 1 + 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                y :  e.getAttribute('y') * 1 + 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
                 width: pathStyle.rectWH,
                 height: pathStyle.rectWH
             })
@@ -802,8 +967,8 @@ function zoom(id){
             setAttributes(e, {
                 x :  this.x - pathStyle.rectWH/2,
                 y :  this.y - pathStyle.rectWH/2,
-                x :  e.getAttribute('x') * 1 - 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
-                y :  e.getAttribute('y') * 1 - 0.125*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                x :  e.getAttribute('x') * 1 - 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
+                y :  e.getAttribute('y') * 1 - 0.1*pathStyle.rectWH,// + pathStyle.rectWH/2,
                 width: pathStyle.rectWH,
                 height: pathStyle.rectWH
             })
